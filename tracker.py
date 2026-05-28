@@ -1,5 +1,6 @@
 import json
 import sys
+from datetime import datetime, timezone
 
 import yfinance as yf
 
@@ -14,6 +15,16 @@ def format_market_cap(value):
     return f"${value:,}"
 
 
+def format_time_ago(iso_string):
+    pub_time = datetime.fromisoformat(iso_string)
+    seconds = max(0, (datetime.now(timezone.utc) - pub_time).total_seconds())
+    if seconds < 3600:
+        return f"{int(seconds // 60)}m ago"
+    if seconds < 86400:
+        return f"{int(seconds // 3600)}h ago"
+    return f"{int(seconds // 86400)}d ago"
+
+
 try:
     with open("tickers.json") as f:
         config = json.load(f)
@@ -22,7 +33,9 @@ except FileNotFoundError:
     sys.exit(1)
 
 for symbol in config["tickers"]:
-    info = yf.Ticker(symbol).info
+    ticker = yf.Ticker(symbol)
+    info = ticker.info
+    news = ticker.news
 
     price = info["currentPrice"]
     prev_close = info["regularMarketPreviousClose"]
@@ -37,3 +50,13 @@ for symbol in config["tickers"]:
         f"52W: ${low_52w:.2f} – ${high_52w:.2f}  "
         f"MktCap: {market_cap}"
     )
+
+    for item in news[:5]:
+        content = item["content"]
+        title = content["title"]
+        source = content["provider"]["displayName"]
+        pub_date = content["pubDate"]
+        print(f"  • {title}")
+        print(f"    {source} · {format_time_ago(pub_date)}")
+
+    print()
