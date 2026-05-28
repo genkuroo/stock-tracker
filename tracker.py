@@ -1,4 +1,6 @@
 import json
+import sys
+
 import yfinance as yf
 
 
@@ -12,8 +14,12 @@ def format_market_cap(value):
     return f"${value:,}"
 
 
-with open("tickers.json") as f:
-    config = json.load(f)
+try:
+    with open("tickers.json") as f:
+        config = json.load(f)
+except FileNotFoundError:
+    print("Error: tickers.json not found. Create it with a list of ticker symbols. See CLAUDE.md.")
+    sys.exit(1)
 
 for symbol in config["tickers"]:
     info = yf.Ticker(symbol).info
