@@ -8,7 +8,7 @@ Personal stock portfolio tracker. CLI tool that pulls live data for a configurab
 
 ## Phases
 
-- [ ] **Phase 1** — MVP: current price, day change %, 52-week high/low, market cap. CLI output.
+- [x] **Phase 1** — MVP: current price, day change %, 52-week high/low, market cap. CLI output. *(`tracker.py`)*
 - [ ] **Phase 2** — Recent news headlines per ticker.
 - [ ] **Phase 3** — Historical price data. Introduces SQLite for storage.
 - [ ] **Phase 4** — Company financials (P/E, EPS, revenue, earnings dates, analyst ratings).
@@ -23,7 +23,32 @@ Personal stock portfolio tracker. CLI tool that pulls live data for a configurab
 - **Storage**: JSON files (Phases 1–2), then SQLite via stdlib `sqlite3` starting in Phase 3. SQL introduced when historical queries make it worthwhile, not before.
 - **AI summaries (Phase 5)**: Claude API via the Anthropic Python SDK.
 - **Privacy**: ticker watchlist may be committed publicly; any position-size or dollar-amount data added in later phases must stay out of git.
+- **Data quality bar**: data should be credible enough to *inform* trading decisions but not be the sole driver of them. Yahoo Finance meets this; don't trade architecture simplicity for marginal accuracy gains.
 
 ## Running
 
-(To be filled in once Phase 1 code lands.)
+**First-time setup** (or when cloning fresh):
+
+```bash
+cd ~/Documents/dev/stock-tracker
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+**Every working session:**
+
+```bash
+cd ~/Documents/dev/stock-tracker
+source .venv/bin/activate
+# ... run scripts, edit code ...
+deactivate   # optional, when done
+```
+
+**Phase 1 script:**
+
+```bash
+python tracker.py
+```
+
+Reads tickers from `tickers.json`, fetches live data via yfinance, prints one line per ticker with price, day change %, 52-week range, and market cap.
