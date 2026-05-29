@@ -1,4 +1,5 @@
 import json
+import sqlite3
 import sys
 from datetime import datetime, timezone
 
@@ -24,6 +25,26 @@ def format_time_ago(iso_string):
         return f"{int(seconds // 3600)}h ago"
     return f"{int(seconds // 86400)}d ago"
 
+
+def init_db():
+    conn = sqlite3.connect("stocks.db")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS prices (
+            symbol TEXT NOT NULL,
+            date TEXT NOT NULL,
+            open REAL,
+            high REAL,
+            low REAL,
+            close REAL,
+            volume INTEGER,
+            PRIMARY KEY (symbol, date)
+        )
+    """)
+    conn.commit()
+    return conn
+
+
+conn = init_db()
 
 try:
     with open("tickers.json") as f:
