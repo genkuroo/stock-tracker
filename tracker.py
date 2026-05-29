@@ -44,6 +44,21 @@ def init_db():
     return conn
 
 
+def get_trend_pct(conn, symbol, days):
+    current = conn.execute(
+        "SELECT close FROM prices WHERE symbol = ? ORDER BY date DESC LIMIT 1",
+        (symbol,),
+    ).fetchone()
+    past = conn.execute(
+        "SELECT close FROM prices WHERE symbol = ? AND date <= date('now', ?) "
+        "ORDER BY date DESC LIMIT 1",
+        (symbol, f"-{days} days"),
+    ).fetchone()
+    if current is None or past is None:
+        return None
+    return ((current[0] - past[0]) / past[0]) * 100
+
+
 def store_history(conn, symbol, hist):
     rows = [
         (
@@ -95,10 +110,13 @@ for symbol in config["tickers"]:
     high_52w = info["fiftyTwoWeekHigh"]
     low_52w = info["fiftyTwoWeekLow"]
     market_cap = format_market_cap(info["marketCap"])
+    trend_30d = get_trend_pct(conn, symbol, 30)
+    trend_30d_str = f"{trend_30d:+.2f}%" if trend_30d is not None else "n/a"
 
     print(
         f"{symbol}: ${price:.2f}  "
         f"Day: {change_pct:+.2f}%  "
+        f"30d: {trend_30d_str}  "
         f"52W: ${low_52w:.2f} – ${high_52w:.2f}  "
         f"MktCap: {market_cap}"
     )

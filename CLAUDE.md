@@ -10,7 +10,7 @@ Personal stock portfolio tracker. CLI tool that pulls live data for a configurab
 
 - [x] **Phase 1** — MVP: current price, day change %, 52-week high/low, market cap. CLI output. *(`tracker.py`)*
 - [x] **Phase 2** — Top 5 recent news headlines per ticker, with source and relative time.
-- [ ] **Phase 3** — Historical price data. Introduces SQLite for storage.
+- [x] **Phase 3** — Historical price data (1y per ticker) stored in `stocks.db` (SQLite); 30-day trend displayed per ticker, computed from the DB.
 - [ ] **Phase 4** — Company financials (P/E, EPS, revenue, earnings dates, analyst ratings).
 - [ ] **Phase 5** — AI-generated TLDR per ticker via the Claude API.
 - [ ] **Phase 6** — Web dashboard (Flask or FastAPI, decision deferred).
