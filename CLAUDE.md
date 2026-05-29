@@ -12,7 +12,9 @@ Personal stock portfolio tracker. CLI tool that pulls live data for a configurab
 - [x] **Phase 2** — Top 5 recent news headlines per ticker, with source and relative time.
 - [x] **Phase 3** — Historical price data (1y per ticker) stored in `stocks.db` (SQLite); 30-day trend displayed per ticker, computed from the DB.
 - [x] **Phase 4** — Company financials (P/E, EPS, revenue, earnings dates, analyst ratings).
-- [ ] **Phase 5** — AI-generated TLDR per ticker via the Claude API.
+- [x] **Phase 5a** — AI-generated TLDR per ticker via the Claude API (Haiku 4.5, titles + financials only).
+- [ ] **Phase 5b** — TLDR history in SQLite for cross-run continuity (avoid hot/cold whipsaw on small noise).
+- [ ] **Phase 5c** — Real article reading via Claude's `web_fetch` tool.
 - [ ] **Phase 6** — Web dashboard (Flask or FastAPI, decision deferred).
 
 ## Tech decisions

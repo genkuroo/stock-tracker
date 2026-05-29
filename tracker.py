@@ -1,8 +1,10 @@
 import json
 import sqlite3
 import sys
+import textwrap
 from datetime import datetime, timezone
 
+import anthropic
 import yfinance as yf
 
 
@@ -25,6 +27,33 @@ def get_next_earnings(ticker):
     if calendar and calendar.get("Earnings Date"):
         return calendar["Earnings Date"][0].strftime("%Y-%m-%d")
     return None
+
+
+TLDR_SYSTEM_PROMPT = (
+    "You are a market analyst summarizing the current state of a single stock "
+    "for an investor reviewing their watchlist. Write a 2-3 sentence TLDR. "
+    "Be direct, avoid hedging, and connect the financial data to the news "
+    "themes when relevant. Do not include disclaimers. "
+    "Use only figures explicitly provided in the input — do not calculate, "
+    "estimate, or invent any percentages or numerical comparisons."
+)
+
+
+def generate_tldr(client, symbol, financials_text, headlines_text):
+    response = client.messages.create(
+        model="claude-haiku-4-5",
+        max_tokens=256,
+        system=TLDR_SYSTEM_PROMPT,
+        messages=[{
+            "role": "user",
+            "content": (
+                f"Ticker: {symbol}\n\n"
+                f"Financials:\n{financials_text}\n\n"
+                f"Recent headlines:\n{headlines_text}"
+            ),
+        }],
+    )
+    return next(b.text for b in response.content if b.type == "text")
 
 
 def format_time_ago(iso_string):
@@ -97,6 +126,7 @@ def store_history(conn, symbol, hist):
 
 
 conn = init_db()
+ai = anthropic.Anthropic()
 
 try:
     with open("tickers.json") as f:
@@ -161,6 +191,26 @@ for symbol in config["tickers"]:
         pub_date = content["pubDate"]
         print(f"  • {title}")
         print(f"    {source} · {format_time_ago(pub_date)}")
+
+    upside_pct = ((target_price - price) / price * 100) if target_price is not None else None
+    financials_text = (
+        f"- P/E: {fmt_or_na(pe, lambda v: f'{v:.2f}')}\n"
+        f"- EPS: {fmt_or_na(eps, lambda v: f'${v:.2f}')}\n"
+        f"- Revenue (TTM): {fmt_or_na(revenue, format_market_cap)}\n"
+        f"- Next earnings: {fmt_or_na(next_earnings, str)}\n"
+        f"- Analyst rating: {fmt_or_na(recommendation, lambda v: v.replace('_', ' ').title())} "
+        f"(target {fmt_or_na(target_price, lambda v: f'${v:.2f}')}, "
+        f"{fmt_or_na(analyst_count, str)} analysts)\n"
+        f"- Upside to analyst target: {fmt_or_na(upside_pct, lambda v: f'{v:+.2f}%')}"
+    )
+    headlines_text = "\n".join(
+        f"{i}. {item['content']['title']} ({item['content']['provider']['displayName']})"
+        for i, item in enumerate(news[:5], 1)
+    ) or "(no recent headlines)"
+
+    tldr = generate_tldr(ai, symbol, financials_text, headlines_text)
+    print("\n  TLDR:")
+    print(textwrap.fill(tldr, width=78, initial_indent="    ", subsequent_indent="    "))
 
     print()
 
