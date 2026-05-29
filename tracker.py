@@ -44,6 +44,32 @@ def init_db():
     return conn
 
 
+def store_history(conn, symbol, hist):
+    rows = [
+        (
+            symbol,
+            date.strftime("%Y-%m-%d"),
+            row["Open"], row["High"], row["Low"], row["Close"],
+            int(row["Volume"]),
+        )
+        for date, row in hist.iterrows()
+    ]
+    before = conn.execute(
+        "SELECT COUNT(*) FROM prices WHERE symbol = ?", (symbol,)
+    ).fetchone()[0]
+    conn.executemany(
+        """INSERT OR IGNORE INTO prices
+           (symbol, date, open, high, low, close, volume)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        rows,
+    )
+    conn.commit()
+    after = conn.execute(
+        "SELECT COUNT(*) FROM prices WHERE symbol = ?", (symbol,)
+    ).fetchone()[0]
+    return after - before
+
+
 conn = init_db()
 
 try:
@@ -53,10 +79,15 @@ except FileNotFoundError:
     print("Error: tickers.json not found. Create it with a list of ticker symbols. See CLAUDE.md.")
     sys.exit(1)
 
+total_new_rows = 0
+
 for symbol in config["tickers"]:
     ticker = yf.Ticker(symbol)
     info = ticker.info
     news = ticker.news
+    hist = ticker.history(period="1y")
+
+    total_new_rows += store_history(conn, symbol, hist)
 
     price = info["currentPrice"]
     prev_close = info["regularMarketPreviousClose"]
@@ -81,3 +112,5 @@ for symbol in config["tickers"]:
         print(f"    {source} · {format_time_ago(pub_date)}")
 
     print()
+
+print(f"[DB] {total_new_rows} new price row(s) added across {len(config['tickers'])} ticker(s)")
