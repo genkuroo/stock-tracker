@@ -16,6 +16,17 @@ def format_market_cap(value):
     return f"${value:,}"
 
 
+def fmt_or_na(value, formatter):
+    return formatter(value) if value is not None else "n/a"
+
+
+def get_next_earnings(ticker):
+    calendar = ticker.calendar
+    if calendar and calendar.get("Earnings Date"):
+        return calendar["Earnings Date"][0].strftime("%Y-%m-%d")
+    return None
+
+
 def format_time_ago(iso_string):
     pub_time = datetime.fromisoformat(iso_string)
     seconds = max(0, (datetime.now(timezone.utc) - pub_time).total_seconds())
@@ -120,6 +131,28 @@ for symbol in config["tickers"]:
         f"52W: ${low_52w:.2f} – ${high_52w:.2f}  "
         f"MktCap: {market_cap}"
     )
+
+    pe = info.get("trailingPE")
+    eps = info.get("trailingEps")
+    revenue = info.get("totalRevenue")
+    target_price = info.get("targetMeanPrice")
+    recommendation = info.get("recommendationKey")
+    analyst_count = info.get("numberOfAnalystOpinions")
+    next_earnings = get_next_earnings(ticker)
+
+    print("  Financials:")
+    print(
+        f"    P/E: {fmt_or_na(pe, lambda v: f'{v:.2f}')}   "
+        f"EPS: {fmt_or_na(eps, lambda v: f'${v:.2f}')}   "
+        f"Revenue (TTM): {fmt_or_na(revenue, format_market_cap)}"
+    )
+    print(f"    Next earnings: {fmt_or_na(next_earnings, str)}")
+    print(
+        f"    Analysts: {fmt_or_na(recommendation, lambda v: v.replace('_', ' ').title())} "
+        f"(target {fmt_or_na(target_price, lambda v: f'${v:.2f}')}, "
+        f"{fmt_or_na(analyst_count, str)} analysts)"
+    )
+    print()
 
     for item in news[:5]:
         content = item["content"]
