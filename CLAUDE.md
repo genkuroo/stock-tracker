@@ -16,8 +16,9 @@ Personal stock portfolio tracker. CLI tool that pulls live data for a configurab
 - [x] **Phase 5b** — TLDR history in SQLite for cross-run continuity (avoid hot/cold whipsaw on small noise).
 - [x] **Phase 5c** — Real article reading via Claude's `web_fetch` tool.
 - [x] **Phase 6a** — Flask web dashboard with home (ticker cards + latest TLDR) and per-ticker detail page (TLDR history, chronicle, recent prices). Pico.css for styling, DB-only (no live yfinance from web layer).
-- [ ] **Phase 6b** — Dashboard polish: ~~price chart per ticker~~ ✓, ~~current-snapshot summary~~ ✓, "refresh" button that shells out to `tracker.py --no-ai` (still pending).
+- [x] **Phase 6b** — Dashboard polish: price chart per ticker, current-snapshot summary, "refresh" button that shells out to `tracker.py --no-ai`.
 - [x] **Phase 7a** — AI Outlook (PROMISING/MIXED/RISKY) per ticker. Structured-output field in `generate_tldr`, conservative-yellow bias, colored pills on dashboard with editorial labels.
+- [x] **Phase 8** — Scheduled automation via macOS `launchd`. `--no-ai` flag on `tracker.py` for cheap free-tier runs; `run_tracker.sh` wrapper loads `.env` and invokes the venv's Python; two LaunchAgents (`~/Library/LaunchAgents/com.stocktracker.{refresh,tldr}.plist`) fire daily 4pm refresh and weekly Monday 4pm AI run. Catches up missed runs on next wake.
 
 ## Tech decisions
 

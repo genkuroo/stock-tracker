@@ -27,6 +27,20 @@
             <h1>Stock Tracker</h1>
             <p>Latest TLDR per ticker in your watchlist.</p>
         </hgroup>
+
+        <form action="/refresh" method="POST" style="margin-bottom: 1.5rem;">
+            <button type="submit" class="secondary">Refresh prices &amp; news (no AI)</button>
+        </form>
+
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                <article style="background: #1e3a5f; border-left: 4px solid #3b82f6;">
+                    <small>⟳ {{ message }}</small>
+                </article>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
         {% for ticker in tickers %}
         <article>
             <header>

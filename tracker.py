@@ -1,3 +1,4 @@
+import argparse
 import json
 import sqlite3
 import sys
@@ -6,6 +7,14 @@ from datetime import datetime, timezone
 
 import anthropic
 import yfinance as yf
+
+parser = argparse.ArgumentParser(description="Pull stock data and (optionally) generate AI TLDRs.")
+parser.add_argument(
+    "--no-ai",
+    action="store_true",
+    help="Skip Claude API calls (refresh prices and news only — no TLDR/chronicle/outlook).",
+)
+args = parser.parse_args()
 
 
 def format_market_cap(value):
@@ -308,7 +317,7 @@ def save_chronicle_entry(conn, symbol, date, entry):
 
 
 conn = init_db()
-ai = anthropic.Anthropic()
+ai = anthropic.Anthropic() if not args.no_ai else None
 today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 try:
@@ -397,13 +406,14 @@ for symbol in config["tickers"]:
         for i, item in enumerate(news[:5], 1)
     ) or "(no recent headlines)"
 
-    result = generate_tldr(ai, conn, symbol, today, financials_text, headlines_text)
-    print(f"\n  TLDR ({result['outlook'].upper()}):")
-    print(textwrap.fill(result["daily"], width=78, initial_indent="    ", subsequent_indent="    "))
-    print(textwrap.fill(
-        f"Outlook rationale: {result['outlook_rationale']}",
-        width=78, initial_indent="    ", subsequent_indent="    ",
-    ))
+    if not args.no_ai:
+        result = generate_tldr(ai, conn, symbol, today, financials_text, headlines_text)
+        print(f"\n  TLDR ({result['outlook'].upper()}):")
+        print(textwrap.fill(result["daily"], width=78, initial_indent="    ", subsequent_indent="    "))
+        print(textwrap.fill(
+            f"Outlook rationale: {result['outlook_rationale']}",
+            width=78, initial_indent="    ", subsequent_indent="    ",
+        ))
 
     print()
 

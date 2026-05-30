@@ -1,9 +1,12 @@
 import json
 import sqlite3
+import subprocess
+import sys
 
-from flask import Flask, render_template
+from flask import Flask, flash, redirect, render_template, url_for
 
 app = Flask(__name__)
+app.secret_key = "stock-tracker-local-only"  # local dev only; not a secret
 
 
 OUTLOOK_LABELS = {"green": "PROMISING", "yellow": "MIXED", "red": "RISKY"}
@@ -108,5 +111,12 @@ def ticker(symbol):
     )
 
 
+@app.route("/refresh", methods=["POST"])
+def refresh():
+    subprocess.Popen([sys.executable, "tracker.py", "--no-ai"])
+    flash("Refresh started — reload the page in ~10 seconds to see updated prices and news.")
+    return redirect(url_for("index"))
+
+
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, port=5001)
