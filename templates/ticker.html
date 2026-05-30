@@ -5,6 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ symbol }} — Stock Tracker</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .outlook-pill {
+            display: inline-block;
+            padding: 0.2em 0.7em;
+            border-radius: 1em;
+            color: white;
+            font-size: 0.8em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .outlook-pill.green { background: #16a34a; }
+        .outlook-pill.yellow { background: #ca8a04; }
+        .outlook-pill.red { background: #dc2626; }
+    </style>
 </head>
 <body>
     <main class="container">
@@ -17,10 +33,18 @@
 
         <h2>Daily TLDRs</h2>
         {% if tldrs %}
-            {% for date, tldr in tldrs %}
+            {% for date, tldr, outlook, outlook_rationale in tldrs %}
             <article>
-                <header><small>{{ date }}</small></header>
+                <header>
+                    <small>{{ date }}</small>
+                    {% if outlook %}
+                    &nbsp;<span class="outlook-pill {{ outlook }}">{{ outlook|outlook_label }}</span>
+                    {% endif %}
+                </header>
                 <p>{{ tldr }}</p>
+                {% if outlook_rationale %}
+                <p><small><em>Outlook: {{ outlook_rationale }}</em></small></p>
+                {% endif %}
             </article>
             {% endfor %}
         {% else %}
@@ -36,6 +60,39 @@
             </ul>
         {% else %}
             <p><em>No chronicle entries yet.</em></p>
+        {% endif %}
+
+        {% if chart_dates %}
+        <h2>Price Chart (last 90 days)</h2>
+        <canvas id="priceChart" style="max-height: 400px;"></canvas>
+        <script>
+            new Chart(document.getElementById("priceChart"), {
+                type: "line",
+                data: {
+                    labels: {{ chart_dates|tojson }},
+                    datasets: [{
+                        label: "{{ symbol }} Close",
+                        data: {{ chart_closes|tojson }},
+                        borderColor: "rgb(75, 192, 192)",
+                        backgroundColor: "rgba(75, 192, 192, 0.1)",
+                        borderWidth: 2,
+                        tension: 0.1,
+                        fill: true,
+                        pointRadius: 0,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: false }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        </script>
         {% endif %}
 
         <h2>Recent Prices (last 30 days)</h2>

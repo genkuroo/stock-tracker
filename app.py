@@ -6,6 +6,14 @@ from flask import Flask, render_template
 app = Flask(__name__)
 
 
+OUTLOOK_LABELS = {"green": "PROMISING", "yellow": "MIXED", "red": "RISKY"}
+
+
+@app.template_filter("outlook_label")
+def outlook_label(value):
+    return OUTLOOK_LABELS.get(value, (value or "").upper())
+
+
 def load_tickers():
     with open("tickers.json") as f:
         return json.load(f)["tickers"]
@@ -13,9 +21,35 @@ def load_tickers():
 
 def get_latest_tldr(conn, symbol):
     return conn.execute(
-        "SELECT date, tldr FROM tldrs WHERE symbol = ? ORDER BY date DESC LIMIT 1",
+        "SELECT date, tldr, outlook, outlook_rationale FROM tldrs "
+        "WHERE symbol = ? ORDER BY date DESC LIMIT 1",
         (symbol,),
     ).fetchone()
+
+
+def get_snapshot(conn, symbol):
+    """Derive close, day change %, and 30-day trend % from the prices table."""
+    rows = conn.execute(
+        "SELECT date, close FROM prices WHERE symbol = ? ORDER BY date DESC LIMIT 30",
+        (symbol,),
+    ).fetchall()
+    if not rows:
+        return None
+    latest_date, latest_close = rows[0]
+    day_change_pct = None
+    if len(rows) > 1:
+        prev_close = rows[1][1]
+        day_change_pct = (latest_close - prev_close) / prev_close * 100
+    trend_30d_pct = None
+    if len(rows) >= 30:
+        old_close = rows[-1][1]
+        trend_30d_pct = (latest_close - old_close) / old_close * 100
+    return {
+        "date": latest_date,
+        "close": latest_close,
+        "day_change_pct": day_change_pct,
+        "trend_30d_pct": trend_30d_pct,
+    }
 
 
 @app.route("/")
@@ -24,10 +58,14 @@ def index():
     tickers = []
     for symbol in load_tickers():
         latest = get_latest_tldr(conn, symbol)
+        snapshot = get_snapshot(conn, symbol)
         tickers.append({
             "symbol": symbol,
             "date": latest[0] if latest else None,
             "tldr": latest[1] if latest else None,
+            "outlook": latest[2] if latest else None,
+            "outlook_rationale": latest[3] if latest else None,
+            "snapshot": snapshot,
         })
     conn.close()
     return render_template("index.html", tickers=tickers)
@@ -37,7 +75,8 @@ def index():
 def ticker(symbol):
     conn = sqlite3.connect("stocks.db")
     tldrs = conn.execute(
-        "SELECT date, tldr FROM tldrs WHERE symbol = ? ORDER BY date DESC",
+        "SELECT date, tldr, outlook, outlook_rationale FROM tldrs "
+        "WHERE symbol = ? ORDER BY date DESC",
         (symbol,),
     ).fetchall()
     chronicle = conn.execute(
@@ -49,13 +88,23 @@ def ticker(symbol):
         "WHERE symbol = ? ORDER BY date DESC LIMIT 30",
         (symbol,),
     ).fetchall()
+    chart_rows = conn.execute(
+        "SELECT date, close FROM prices WHERE symbol = ? "
+        "ORDER BY date DESC LIMIT 90",
+        (symbol,),
+    ).fetchall()
     conn.close()
+    chart_rows.reverse()
+    chart_dates = [row[0] for row in chart_rows]
+    chart_closes = [row[1] for row in chart_rows]
     return render_template(
         "ticker.html",
         symbol=symbol,
         tldrs=tldrs,
         chronicle=chronicle,
         prices=prices,
+        chart_dates=chart_dates,
+        chart_closes=chart_closes,
     )
 
 

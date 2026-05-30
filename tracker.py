@@ -53,7 +53,7 @@ TLDR_SYSTEM_PROMPT = (
     "other company-specific quantitative claims from article text. Themes "
     "only.\n"
     "\n"
-    "**Output**: structured JSON with three fields:\n"
+    "**Output**: structured JSON with five fields:\n"
     "\n"
     "1. `daily`: 2-3 sentence TLDR of the stock's current state, connecting "
     "data (from Financials) to themes (from headlines and articles). "
@@ -69,6 +69,20 @@ TLDR_SYSTEM_PROMPT = (
     "multi-month arc. Example: \"As of 2026-05: Apple holding near 52w "
     "highs on sustained AI demand; no material risks surfaced this month.\" "
     "Always provide one — the script decides whether to save it.\n"
+    "\n"
+    "4. `outlook`: One of \"green\", \"yellow\", or \"red\" — a directional "
+    "read on the stock right now:\n"
+    "   - green = bullish (fundamentals, narrative, and trend align "
+    "positively; limited material risks)\n"
+    "   - yellow = mixed/hold (fundamentals and narrative diverge, or "
+    "conditions genuinely uncertain)\n"
+    "   - red = bearish (material risks dominate, trend breaking down, or "
+    "negative catalysts likely)\n"
+    "   Be conservative — yellow is the default when uncertain. Do not flip "
+    "the outlook from a prior call's value on noisy data; only revise on "
+    "material change.\n"
+    "\n"
+    "5. `outlook_rationale`: One sentence (≤ 25 words) explaining the outlook.\n"
     "\n"
     "**Web fetch**: fetch URLs for headlines likely to contain substantive "
     "analysis or company-specific reporting. Skip aggregator/pump pieces, "
@@ -97,8 +111,17 @@ TLDR_SCHEMA = {
             "type": "string",
             "description": "1-2 sentence dated note for the long-term chronicle.",
         },
+        "outlook": {
+            "type": "string",
+            "enum": ["green", "yellow", "red"],
+            "description": "Directional read: green=bullish, yellow=mixed/hold, red=bearish.",
+        },
+        "outlook_rationale": {
+            "type": "string",
+            "description": "One sentence explaining the outlook.",
+        },
     },
-    "required": ["daily", "material_change", "chronicle_entry"],
+    "required": ["daily", "material_change", "chronicle_entry", "outlook", "outlook_rationale"],
     "additionalProperties": False,
 }
 
@@ -107,7 +130,9 @@ def generate_tldr(client, conn, symbol, today, financials_text, headlines_text):
     priors = get_recent_tldrs(conn, symbol, today, n=3)
     chronicle = get_chronicle(conn, symbol)
 
-    priors_text = "\n".join(f"- {d}: {t}" for d, t in priors) or "(none yet)"
+    priors_text = "\n".join(
+        f"- {d} [{(o or 'none').upper()}]: {t}" for d, t, o in priors
+    ) or "(none yet)"
     chronicle_text = "\n".join(f"- {d}: {e}" for d, e in chronicle) or "(none yet)"
 
     user_prompt = (
@@ -143,13 +168,20 @@ def generate_tldr(client, conn, symbol, today, financials_text, headlines_text):
     text = next(b.text for b in response.content if b.type == "text")
     result = json.loads(text)
 
-    save_tldr(conn, symbol, today, result["daily"])
+    save_tldr(
+        conn, symbol, today,
+        result["daily"], result["outlook"], result["outlook_rationale"],
+    )
 
     is_new_month = (not chronicle) or (chronicle[-1][0][:7] != today[:7])
     if is_new_month or result["material_change"]:
         save_chronicle_entry(conn, symbol, today, result["chronicle_entry"])
 
-    return result["daily"]
+    return {
+        "daily": result["daily"],
+        "outlook": result["outlook"],
+        "outlook_rationale": result["outlook_rationale"],
+    }
 
 
 def format_time_ago(iso_string):
@@ -184,6 +216,11 @@ def init_db():
             PRIMARY KEY (symbol, date)
         )
     """)
+    for column in ("outlook TEXT", "outlook_rationale TEXT"):
+        try:
+            conn.execute(f"ALTER TABLE tldrs ADD COLUMN {column}")
+        except sqlite3.OperationalError:
+            pass
     conn.execute("""
         CREATE TABLE IF NOT EXISTS chronicle (
             symbol TEXT NOT NULL,
@@ -239,7 +276,7 @@ def store_history(conn, symbol, hist):
 
 def get_recent_tldrs(conn, symbol, today, n=3):
     rows = conn.execute(
-        "SELECT date, tldr FROM tldrs WHERE symbol = ? AND date < ? "
+        "SELECT date, tldr, outlook FROM tldrs WHERE symbol = ? AND date < ? "
         "ORDER BY date DESC LIMIT ?",
         (symbol, today, n),
     ).fetchall()
@@ -253,10 +290,11 @@ def get_chronicle(conn, symbol):
     ).fetchall()
 
 
-def save_tldr(conn, symbol, date, tldr):
+def save_tldr(conn, symbol, date, tldr, outlook, outlook_rationale):
     conn.execute(
-        "INSERT OR REPLACE INTO tldrs (symbol, date, tldr) VALUES (?, ?, ?)",
-        (symbol, date, tldr),
+        "INSERT OR REPLACE INTO tldrs (symbol, date, tldr, outlook, outlook_rationale) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (symbol, date, tldr, outlook, outlook_rationale),
     )
     conn.commit()
 
@@ -359,9 +397,13 @@ for symbol in config["tickers"]:
         for i, item in enumerate(news[:5], 1)
     ) or "(no recent headlines)"
 
-    tldr = generate_tldr(ai, conn, symbol, today, financials_text, headlines_text)
-    print("\n  TLDR:")
-    print(textwrap.fill(tldr, width=78, initial_indent="    ", subsequent_indent="    "))
+    result = generate_tldr(ai, conn, symbol, today, financials_text, headlines_text)
+    print(f"\n  TLDR ({result['outlook'].upper()}):")
+    print(textwrap.fill(result["daily"], width=78, initial_indent="    ", subsequent_indent="    "))
+    print(textwrap.fill(
+        f"Outlook rationale: {result['outlook_rationale']}",
+        width=78, initial_indent="    ", subsequent_indent="    ",
+    ))
 
     print()
 

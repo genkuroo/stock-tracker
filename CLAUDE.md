@@ -16,7 +16,8 @@ Personal stock portfolio tracker. CLI tool that pulls live data for a configurab
 - [x] **Phase 5b** — TLDR history in SQLite for cross-run continuity (avoid hot/cold whipsaw on small noise).
 - [x] **Phase 5c** — Real article reading via Claude's `web_fetch` tool.
 - [x] **Phase 6a** — Flask web dashboard with home (ticker cards + latest TLDR) and per-ticker detail page (TLDR history, chronicle, recent prices). Pico.css for styling, DB-only (no live yfinance from web layer).
-- [ ] **Phase 6b** — Dashboard polish: price chart per ticker, current-snapshot summary, "refresh" button that shells out to `tracker.py`.
+- [ ] **Phase 6b** — Dashboard polish: ~~price chart per ticker~~ ✓, ~~current-snapshot summary~~ ✓, "refresh" button that shells out to `tracker.py --no-ai` (still pending).
+- [x] **Phase 7a** — AI Outlook (PROMISING/MIXED/RISKY) per ticker. Structured-output field in `generate_tldr`, conservative-yellow bias, colored pills on dashboard with editorial labels.
 
 ## Tech decisions
 
