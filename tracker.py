@@ -317,7 +317,7 @@ def save_chronicle_entry(conn, symbol, date, entry):
 
 
 conn = init_db()
-ai = anthropic.Anthropic() if not args.no_ai else None
+ai = anthropic.Anthropic(max_retries=6) if not args.no_ai else None
 today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 try:
@@ -327,15 +327,16 @@ except FileNotFoundError:
     print("Error: tickers.json not found. Create it with a list of ticker symbols. See CLAUDE.md.")
     sys.exit(1)
 
-total_new_rows = 0
-
-for symbol in config["tickers"]:
+def process_ticker(symbol):
+    """Fetch and process one ticker. Returns count of new price rows added.
+    Raises on any per-ticker error so the caller can log + skip rather than
+    aborting the whole run (yfinance is a flaky external boundary)."""
     ticker = yf.Ticker(symbol)
     info = ticker.info
     news = ticker.news
     hist = ticker.history(period="1y")
 
-    total_new_rows += store_history(conn, symbol, hist)
+    new_rows = store_history(conn, symbol, hist)
 
     price = info["currentPrice"]
     prev_close = info["regularMarketPreviousClose"]
@@ -415,6 +416,24 @@ for symbol in config["tickers"]:
             width=78, initial_indent="    ", subsequent_indent="    ",
         ))
 
+    return new_rows
+
+
+total_new_rows = 0
+failed_symbols = []
+
+for symbol in config["tickers"]:
+    try:
+        total_new_rows += process_ticker(symbol)
+    except Exception as e:
+        failed_symbols.append(symbol)
+        print(f"\n[FAILED] {symbol} — {type(e).__name__}: {e}")
     print()
 
-print(f"[DB] {total_new_rows} new price row(s) added across {len(config['tickers'])} ticker(s)")
+successful_count = len(config["tickers"]) - len(failed_symbols)
+print(f"[DB] {total_new_rows} new price row(s) added across {successful_count} successful ticker(s)")
+if failed_symbols:
+    print(
+        f"[WARN] Skipped {len(failed_symbols)} ticker(s): {', '.join(failed_symbols)} "
+        "— likely transient yfinance/Yahoo issue; retry in a few minutes."
+    )

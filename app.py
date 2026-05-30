@@ -3,7 +3,7 @@ import sqlite3
 import subprocess
 import sys
 
-from flask import Flask, flash, redirect, render_template, url_for
+from flask import Flask, flash, redirect, render_template, request, url_for
 
 app = Flask(__name__)
 app.secret_key = "stock-tracker-local-only"  # local dev only; not a secret
@@ -20,6 +20,11 @@ def outlook_label(value):
 def load_tickers():
     with open("tickers.json") as f:
         return json.load(f)["tickers"]
+
+
+def save_tickers(tickers):
+    with open("tickers.json", "w") as f:
+        json.dump({"tickers": tickers}, f, indent=2)
 
 
 def get_latest_tldr(conn, symbol):
@@ -115,6 +120,30 @@ def ticker(symbol):
 def refresh():
     subprocess.Popen([sys.executable, "tracker.py", "--no-ai"])
     flash("Refresh started — reload the page in ~10 seconds to see updated prices and news.")
+    return redirect(url_for("index"))
+
+
+@app.route("/watchlist/add", methods=["POST"])
+def watchlist_add():
+    symbol = request.form.get("symbol", "").strip().upper()
+    if symbol:
+        tickers = load_tickers()
+        if symbol in tickers:
+            flash(f"{symbol} is already in your watchlist.")
+        else:
+            tickers.append(symbol)
+            save_tickers(tickers)
+            flash(f"Added {symbol}. Run a refresh or full update to populate its data.")
+    return redirect(url_for("index"))
+
+
+@app.route("/watchlist/remove/<symbol>", methods=["POST"])
+def watchlist_remove(symbol):
+    tickers = load_tickers()
+    if symbol in tickers:
+        tickers.remove(symbol)
+        save_tickers(tickers)
+        flash(f"Removed {symbol} from watchlist. Historical data is preserved in the DB if you re-add it later.")
     return redirect(url_for("index"))
 
 

@@ -28,9 +28,15 @@
             <p>Latest TLDR per ticker in your watchlist.</p>
         </hgroup>
 
-        <form action="/refresh" method="POST" style="margin-bottom: 1.5rem;">
-            <button type="submit" class="secondary">Refresh prices &amp; news (no AI)</button>
-        </form>
+        <div style="display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap; margin-bottom: 1.5rem;">
+            <form action="/refresh" method="POST" style="margin: 0;">
+                <button type="submit" class="secondary" style="margin: 0;">Refresh prices &amp; news (no AI)</button>
+            </form>
+            <form action="/watchlist/add" method="POST" style="display: flex; gap: 0.5rem; margin: 0; flex-grow: 1; max-width: 400px;">
+                <input type="text" name="symbol" placeholder="Add ticker (e.g., NVDA)" required style="text-transform: uppercase; margin: 0;">
+                <button type="submit" style="margin: 0;">Add</button>
+            </form>
+        </div>
 
         {% with messages = get_flashed_messages() %}
             {% if messages %}
@@ -71,6 +77,14 @@
             {% else %}
             <p><em>No TLDR yet — run <code>python tracker.py</code> to generate one.</em></p>
             {% endif %}
+            <footer style="text-align: right; padding-top: 0.5rem;">
+                <form action="/watchlist/remove/{{ ticker.symbol }}" method="POST" style="display: inline; margin: 0;"
+                      onsubmit="return confirm('Remove {{ ticker.symbol }} from your watchlist? Historical data is kept in the DB.');">
+                    <button type="submit" class="secondary outline" style="font-size: 0.8em; padding: 0.25em 0.75em; margin: 0;">
+                        Remove {{ ticker.symbol }}
+                    </button>
+                </form>
+            </footer>
         </article>
         {% endfor %}
     </main>
