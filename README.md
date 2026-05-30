@@ -2,7 +2,7 @@
 
 A personal stock portfolio CLI and local dashboard. Pulls live data via `yfinance`, stores history in SQLite, generates AI-written daily TLDRs and a long-term "chronicle" per ticker via the Claude API, and exposes everything through a small Flask dashboard.
 
-Built as a learning project — not a deployable product. Runs entirely on your local machine.
+Built as a learning project — not a deployable product. Runs entirely on local machine.
 
 ---
 
