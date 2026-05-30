@@ -31,27 +31,54 @@ def get_next_earnings(ticker):
 
 TLDR_SYSTEM_PROMPT = (
     "You are a market analyst tracking a single stock for an investor reviewing "
-    "their watchlist. You produce a structured JSON response with three fields:\n"
+    "their watchlist.\n"
     "\n"
-    "1. `daily`: A 2-3 sentence TLDR of the stock's current state, connecting "
-    "financial data to news themes. Be direct, avoid hedging, no disclaimers.\n"
+    "**RULE 1: Numbers come from the `Financials` section ONLY.** The "
+    "Financials section lists every quantitative fact you may reference: "
+    "price, day change, 52-week range, market cap, P/E, EPS, revenue, "
+    "earnings dates, analyst targets, upside percentage. Do NOT cite, "
+    "paraphrase, or reference any number from any other source — including "
+    "headlines, article bodies, prior TLDRs, or the chronicle. If a number "
+    "appears in a headline (e.g., \"$37 Billion AI Run Rate\"), you may "
+    "reference the topic qualitatively (\"a major AI revenue milestone\") "
+    "but not the specific figure. Headline and article numbers may be "
+    "stale, wrong, or misattributed. Do NOT calculate, estimate, or invent "
+    "percentages of your own.\n"
     "\n"
-    "2. `material_change`: Boolean. True if today's data represents a material "
-    "shift from the prior arc — a new risk surfacing, earnings beat/miss, "
-    "sustained trend reversal, or major regulatory/product news. False if "
+    "**RULE 2: Articles are for themes only.** When you use `web_fetch` to "
+    "read an article, use it to understand qualitative context — what is "
+    "the story about, what concerns or opportunities are being discussed, "
+    "what is the narrative theme. Do not extract specific figures, growth "
+    "rates, dates, revenue numbers, prices, product specifications, or any "
+    "other company-specific quantitative claims from article text. Themes "
+    "only.\n"
+    "\n"
+    "**Output**: structured JSON with three fields:\n"
+    "\n"
+    "1. `daily`: 2-3 sentence TLDR of the stock's current state, connecting "
+    "data (from Financials) to themes (from headlines and articles). "
+    "Direct, no hedging, no disclaimers.\n"
+    "\n"
+    "2. `material_change`: Boolean. True if today's data represents a "
+    "material shift from the prior arc — new risk, earnings beat/miss, "
+    "sustained trend reversal, major regulatory/product news. False if "
     "today is a continuation of recent priors with normal day-to-day movement.\n"
     "\n"
-    "3. `chronicle_entry`: A 1-2 sentence dated note suitable for the long-term "
+    "3. `chronicle_entry`: 1-2 sentence dated note for the long-term "
     "chronicle, describing the stock's current standing relative to its "
-    "multi-month arc. Example: \"As of 2026-05: Apple holding near 52w highs "
-    "on sustained AI demand; no material risks surfaced this month.\" Always "
-    "provide one — the script decides whether to save it.\n"
+    "multi-month arc. Example: \"As of 2026-05: Apple holding near 52w "
+    "highs on sustained AI demand; no material risks surfaced this month.\" "
+    "Always provide one — the script decides whether to save it.\n"
     "\n"
-    "When prior TLDRs and a chronicle are provided, maintain narrative "
-    "continuity. Don't flip your stance on small fluctuations — only revise "
-    "when the data materially contradicts the prior view. Use only figures "
-    "explicitly provided in the input; do not calculate, estimate, or invent "
-    "percentages."
+    "**Web fetch**: fetch URLs for headlines likely to contain substantive "
+    "analysis or company-specific reporting. Skip aggregator/pump pieces, "
+    "obvious paywalls, or headlines that already convey their full point. "
+    "Remember Rule 2: themes only.\n"
+    "\n"
+    "**Continuity**: when prior TLDRs and a chronicle are provided, "
+    "maintain narrative continuity. Don't flip your stance on small "
+    "fluctuations — only revise when the data materially contradicts the "
+    "prior view."
 )
 
 
@@ -83,23 +110,35 @@ def generate_tldr(client, conn, symbol, today, financials_text, headlines_text):
     priors_text = "\n".join(f"- {d}: {t}" for d, t in priors) or "(none yet)"
     chronicle_text = "\n".join(f"- {d}: {e}" for d, e in chronicle) or "(none yet)"
 
-    response = client.messages.create(
-        model="claude-haiku-4-5",
-        max_tokens=512,
-        system=TLDR_SYSTEM_PROMPT,
-        output_config={"format": {"type": "json_schema", "schema": TLDR_SCHEMA}},
-        messages=[{
-            "role": "user",
-            "content": (
-                f"Today's date: {today}\n\n"
-                f"Ticker: {symbol}\n\n"
-                f"Financials:\n{financials_text}\n\n"
-                f"Recent headlines:\n{headlines_text}\n\n"
-                f"Prior daily TLDRs (oldest first):\n{priors_text}\n\n"
-                f"Chronicle (long-term arc):\n{chronicle_text}"
-            ),
-        }],
+    user_prompt = (
+        f"Today's date: {today}\n\n"
+        f"Ticker: {symbol}\n\n"
+        f"Financials:\n{financials_text}\n\n"
+        f"Recent headlines:\n{headlines_text}\n\n"
+        f"Prior daily TLDRs (oldest first):\n{priors_text}\n\n"
+        f"Chronicle (long-term arc):\n{chronicle_text}"
     )
+    messages = [{"role": "user", "content": user_prompt}]
+
+    while True:
+        response = client.messages.create(
+            model="claude-haiku-4-5",
+            max_tokens=512,
+            system=TLDR_SYSTEM_PROMPT,
+            tools=[{
+                "type": "web_fetch_20260209",
+                "name": "web_fetch",
+                "allowed_callers": ["direct"],
+            }],
+            output_config={"format": {"type": "json_schema", "schema": TLDR_SCHEMA}},
+            messages=messages,
+        )
+        if response.stop_reason != "pause_turn":
+            break
+        messages = [
+            {"role": "user", "content": user_prompt},
+            {"role": "assistant", "content": response.content},
+        ]
 
     text = next(b.text for b in response.content if b.type == "text")
     result = json.loads(text)
@@ -300,6 +339,11 @@ for symbol in config["tickers"]:
 
     upside_pct = ((target_price - price) / price * 100) if target_price is not None else None
     financials_text = (
+        f"- Current price: ${price:.2f}\n"
+        f"- Day change: {change_pct:+.2f}%\n"
+        f"- 30-day trend: {trend_30d_str}\n"
+        f"- 52-week range: ${low_52w:.2f} – ${high_52w:.2f}\n"
+        f"- Market cap: {market_cap}\n"
         f"- P/E: {fmt_or_na(pe, lambda v: f'{v:.2f}')}\n"
         f"- EPS: {fmt_or_na(eps, lambda v: f'${v:.2f}')}\n"
         f"- Revenue (TTM): {fmt_or_na(revenue, format_market_cap)}\n"
@@ -310,7 +354,8 @@ for symbol in config["tickers"]:
         f"- Upside to analyst target: {fmt_or_na(upside_pct, lambda v: f'{v:+.2f}%')}"
     )
     headlines_text = "\n".join(
-        f"{i}. {item['content']['title']} ({item['content']['provider']['displayName']})"
+        f"{i}. {item['content']['title']} ({item['content']['provider']['displayName']})\n"
+        f"   URL: {item['content']['canonicalUrl']['url']}"
         for i, item in enumerate(news[:5], 1)
     ) or "(no recent headlines)"
 
