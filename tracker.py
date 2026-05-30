@@ -30,30 +30,87 @@ def get_next_earnings(ticker):
 
 
 TLDR_SYSTEM_PROMPT = (
-    "You are a market analyst summarizing the current state of a single stock "
-    "for an investor reviewing their watchlist. Write a 2-3 sentence TLDR. "
-    "Be direct, avoid hedging, and connect the financial data to the news "
-    "themes when relevant. Do not include disclaimers. "
-    "Use only figures explicitly provided in the input — do not calculate, "
-    "estimate, or invent any percentages or numerical comparisons."
+    "You are a market analyst tracking a single stock for an investor reviewing "
+    "their watchlist. You produce a structured JSON response with three fields:\n"
+    "\n"
+    "1. `daily`: A 2-3 sentence TLDR of the stock's current state, connecting "
+    "financial data to news themes. Be direct, avoid hedging, no disclaimers.\n"
+    "\n"
+    "2. `material_change`: Boolean. True if today's data represents a material "
+    "shift from the prior arc — a new risk surfacing, earnings beat/miss, "
+    "sustained trend reversal, or major regulatory/product news. False if "
+    "today is a continuation of recent priors with normal day-to-day movement.\n"
+    "\n"
+    "3. `chronicle_entry`: A 1-2 sentence dated note suitable for the long-term "
+    "chronicle, describing the stock's current standing relative to its "
+    "multi-month arc. Example: \"As of 2026-05: Apple holding near 52w highs "
+    "on sustained AI demand; no material risks surfaced this month.\" Always "
+    "provide one — the script decides whether to save it.\n"
+    "\n"
+    "When prior TLDRs and a chronicle are provided, maintain narrative "
+    "continuity. Don't flip your stance on small fluctuations — only revise "
+    "when the data materially contradicts the prior view. Use only figures "
+    "explicitly provided in the input; do not calculate, estimate, or invent "
+    "percentages."
 )
 
 
-def generate_tldr(client, symbol, financials_text, headlines_text):
+TLDR_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "daily": {
+            "type": "string",
+            "description": "2-3 sentence current-state TLDR.",
+        },
+        "material_change": {
+            "type": "boolean",
+            "description": "True if today's data represents a material shift from the prior arc.",
+        },
+        "chronicle_entry": {
+            "type": "string",
+            "description": "1-2 sentence dated note for the long-term chronicle.",
+        },
+    },
+    "required": ["daily", "material_change", "chronicle_entry"],
+    "additionalProperties": False,
+}
+
+
+def generate_tldr(client, conn, symbol, today, financials_text, headlines_text):
+    priors = get_recent_tldrs(conn, symbol, today, n=3)
+    chronicle = get_chronicle(conn, symbol)
+
+    priors_text = "\n".join(f"- {d}: {t}" for d, t in priors) or "(none yet)"
+    chronicle_text = "\n".join(f"- {d}: {e}" for d, e in chronicle) or "(none yet)"
+
     response = client.messages.create(
         model="claude-haiku-4-5",
-        max_tokens=256,
+        max_tokens=512,
         system=TLDR_SYSTEM_PROMPT,
+        output_config={"format": {"type": "json_schema", "schema": TLDR_SCHEMA}},
         messages=[{
             "role": "user",
             "content": (
+                f"Today's date: {today}\n\n"
                 f"Ticker: {symbol}\n\n"
                 f"Financials:\n{financials_text}\n\n"
-                f"Recent headlines:\n{headlines_text}"
+                f"Recent headlines:\n{headlines_text}\n\n"
+                f"Prior daily TLDRs (oldest first):\n{priors_text}\n\n"
+                f"Chronicle (long-term arc):\n{chronicle_text}"
             ),
         }],
     )
-    return next(b.text for b in response.content if b.type == "text")
+
+    text = next(b.text for b in response.content if b.type == "text")
+    result = json.loads(text)
+
+    save_tldr(conn, symbol, today, result["daily"])
+
+    is_new_month = (not chronicle) or (chronicle[-1][0][:7] != today[:7])
+    if is_new_month or result["material_change"]:
+        save_chronicle_entry(conn, symbol, today, result["chronicle_entry"])
+
+    return result["daily"]
 
 
 def format_time_ago(iso_string):
@@ -77,6 +134,22 @@ def init_db():
             low REAL,
             close REAL,
             volume INTEGER,
+            PRIMARY KEY (symbol, date)
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS tldrs (
+            symbol TEXT NOT NULL,
+            date TEXT NOT NULL,
+            tldr TEXT NOT NULL,
+            PRIMARY KEY (symbol, date)
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS chronicle (
+            symbol TEXT NOT NULL,
+            date TEXT NOT NULL,
+            entry TEXT NOT NULL,
             PRIMARY KEY (symbol, date)
         )
     """)
@@ -125,8 +198,41 @@ def store_history(conn, symbol, hist):
     return after - before
 
 
+def get_recent_tldrs(conn, symbol, today, n=3):
+    rows = conn.execute(
+        "SELECT date, tldr FROM tldrs WHERE symbol = ? AND date < ? "
+        "ORDER BY date DESC LIMIT ?",
+        (symbol, today, n),
+    ).fetchall()
+    return list(reversed(rows))
+
+
+def get_chronicle(conn, symbol):
+    return conn.execute(
+        "SELECT date, entry FROM chronicle WHERE symbol = ? ORDER BY date ASC",
+        (symbol,),
+    ).fetchall()
+
+
+def save_tldr(conn, symbol, date, tldr):
+    conn.execute(
+        "INSERT OR REPLACE INTO tldrs (symbol, date, tldr) VALUES (?, ?, ?)",
+        (symbol, date, tldr),
+    )
+    conn.commit()
+
+
+def save_chronicle_entry(conn, symbol, date, entry):
+    conn.execute(
+        "INSERT OR REPLACE INTO chronicle (symbol, date, entry) VALUES (?, ?, ?)",
+        (symbol, date, entry),
+    )
+    conn.commit()
+
+
 conn = init_db()
 ai = anthropic.Anthropic()
+today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 try:
     with open("tickers.json") as f:
@@ -208,7 +314,7 @@ for symbol in config["tickers"]:
         for i, item in enumerate(news[:5], 1)
     ) or "(no recent headlines)"
 
-    tldr = generate_tldr(ai, symbol, financials_text, headlines_text)
+    tldr = generate_tldr(ai, conn, symbol, today, financials_text, headlines_text)
     print("\n  TLDR:")
     print(textwrap.fill(tldr, width=78, initial_indent="    ", subsequent_indent="    "))
 
