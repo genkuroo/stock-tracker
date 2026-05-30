@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ symbol }} — Stock Tracker</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+</head>
+<body>
+    <main class="container">
+        <nav>
+            <ul>
+                <li><a href="/">← Back to watchlist</a></li>
+            </ul>
+        </nav>
+        <h1>{{ symbol }}</h1>
+
+        <h2>Daily TLDRs</h2>
+        {% if tldrs %}
+            {% for date, tldr in tldrs %}
+            <article>
+                <header><small>{{ date }}</small></header>
+                <p>{{ tldr }}</p>
+            </article>
+            {% endfor %}
+        {% else %}
+            <p><em>No TLDRs recorded yet.</em></p>
+        {% endif %}
+
+        <h2>Chronicle</h2>
+        {% if chronicle %}
+            <ul>
+            {% for date, entry in chronicle %}
+                <li><strong>{{ date }}</strong> — {{ entry }}</li>
+            {% endfor %}
+            </ul>
+        {% else %}
+            <p><em>No chronicle entries yet.</em></p>
+        {% endif %}
+
+        <h2>Recent Prices (last 30 days)</h2>
+        {% if prices %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Open</th>
+                        <th>High</th>
+                        <th>Low</th>
+                        <th>Close</th>
+                        <th>Volume</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for date, open, high, low, close, volume in prices %}
+                    <tr>
+                        <td>{{ date }}</td>
+                        <td>${{ "%.2f"|format(open) }}</td>
+                        <td>${{ "%.2f"|format(high) }}</td>
+                        <td>${{ "%.2f"|format(low) }}</td>
+                        <td>${{ "%.2f"|format(close) }}</td>
+                        <td>{{ "{:,}".format(volume) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p><em>No price data yet.</em></p>
+        {% endif %}
+    </main>
+</body>
+</html>

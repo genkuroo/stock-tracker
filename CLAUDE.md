@@ -15,7 +15,8 @@ Personal stock portfolio tracker. CLI tool that pulls live data for a configurab
 - [x] **Phase 5a** — AI-generated TLDR per ticker via the Claude API (Haiku 4.5, titles + financials only).
 - [x] **Phase 5b** — TLDR history in SQLite for cross-run continuity (avoid hot/cold whipsaw on small noise).
 - [x] **Phase 5c** — Real article reading via Claude's `web_fetch` tool.
-- [ ] **Phase 6** — Web dashboard (Flask or FastAPI, decision deferred).
+- [x] **Phase 6a** — Flask web dashboard with home (ticker cards + latest TLDR) and per-ticker detail page (TLDR history, chronicle, recent prices). Pico.css for styling, DB-only (no live yfinance from web layer).
+- [ ] **Phase 6b** — Dashboard polish: price chart per ticker, current-snapshot summary, "refresh" button that shells out to `tracker.py`.
 
 ## Tech decisions
 

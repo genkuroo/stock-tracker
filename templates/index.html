@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Tracker</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+</head>
+<body>
+    <main class="container">
+        <hgroup>
+            <h1>Stock Tracker</h1>
+            <p>Latest TLDR per ticker in your watchlist.</p>
+        </hgroup>
+        {% for ticker in tickers %}
+        <article>
+            <header>
+                <h2><a href="/ticker/{{ ticker.symbol }}">{{ ticker.symbol }}</a></h2>
+                {% if ticker.date %}
+                <small>Last update: {{ ticker.date }}</small>
+                {% endif %}
+            </header>
+            {% if ticker.tldr %}
+            <p>{{ ticker.tldr }}</p>
+            {% else %}
+            <p><em>No TLDR yet — run <code>python tracker.py</code> to generate one.</em></p>
+            {% endif %}
+        </article>
+        {% endfor %}
+    </main>
+</body>
+</html>
