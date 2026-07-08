@@ -266,6 +266,10 @@ def store_history(conn, symbol, hist):
             int(row["Volume"]),
         )
         for date, row in hist.iterrows()
+        # yfinance occasionally returns a row (e.g. an in-progress trading day)
+        # with volume but NaN OHLC. Skip those — a partial row stored as NULL
+        # breaks the dashboard's price formatting.
+        if not row[["Open", "High", "Low", "Close"]].isnull().any()
     ]
     before = conn.execute(
         "SELECT COUNT(*) FROM prices WHERE symbol = ?", (symbol,)

@@ -38,7 +38,8 @@ def get_latest_tldr(conn, symbol):
 def get_snapshot(conn, symbol):
     """Derive close, day change %, and 30-day trend % from the prices table."""
     rows = conn.execute(
-        "SELECT date, close FROM prices WHERE symbol = ? ORDER BY date DESC LIMIT 30",
+        "SELECT date, close FROM prices WHERE symbol = ? AND close IS NOT NULL "
+        "ORDER BY date DESC LIMIT 30",
         (symbol,),
     ).fetchall()
     if not rows:
@@ -93,11 +94,11 @@ def ticker(symbol):
     ).fetchall()
     prices = conn.execute(
         "SELECT date, open, high, low, close, volume FROM prices "
-        "WHERE symbol = ? ORDER BY date DESC LIMIT 30",
+        "WHERE symbol = ? AND close IS NOT NULL ORDER BY date DESC LIMIT 30",
         (symbol,),
     ).fetchall()
     chart_rows = conn.execute(
-        "SELECT date, close FROM prices WHERE symbol = ? "
+        "SELECT date, close FROM prices WHERE symbol = ? AND close IS NOT NULL "
         "ORDER BY date DESC LIMIT 90",
         (symbol,),
     ).fetchall()

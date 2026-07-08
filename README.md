@@ -118,6 +118,17 @@ The Claude API integration evolved across three phases worth highlighting:
 
 - **`--no-ai` mode.** Token cost adds up if you re-run on a schedule. Splitting `tracker.py` into a "full" mode and a `--no-ai` mode lets daily automation run for free; the API call only fires when you actually want refreshed AI analysis.
 
+### Upstream data is dirty — handle it in two places
+
+yfinance is free and convenient, but it isn't clean. On some days it returns a row for a ticker that has a trading **volume** but no open/high/low/close prices (they come back as `NaN`) — typically an in-progress trading day or an upstream glitch. Left alone, `tracker.py` stored those `NaN`s as SQL `NULL`s, and the dashboard later crashed with a 500 when it tried to format `None` as a dollar figure (`$%.2f`). Because the bad row landed inside the "last 30 days" window, it broke the detail page for *every* ticker at once.
+
+The fix was deliberately at two layers, because there were really two bugs:
+
+1. **Don't ingest junk** — `store_history` now skips any row with a missing OHLC value, so partial rows never reach the database.
+2. **Don't trust the database either** — the dashboard's price queries filter `WHERE close IS NOT NULL`, so even if a bad row slips in, the page renders instead of crashing.
+
+The lesson: with an untrusted data source, validating on the way *in* isn't enough on its own — the read path should also be defensive, so one bad row degrades gracefully instead of taking down the page.
+
 ### The macOS Documents folder will fight you
 
 The single biggest unexpected hurdle of the project. Starting in macOS Mojave, `~/Documents/` is part of the TCC (Transparency, Consent, Control) protected folders. Processes launched by the user from Terminal can access it (Terminal has been granted permission). Processes launched by `launchd` cannot — they hit:
