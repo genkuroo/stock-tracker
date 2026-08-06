@@ -1,12 +1,46 @@
+import functools
 import json
+import os
 import sqlite3
 import subprocess
 import sys
 
-from flask import Flask, flash, redirect, render_template, request, url_for
+from flask import Flask, abort, flash, redirect, render_template, request, url_for
+
+# Paths are configurable so the same image can run twice: once against the real
+# watchlist on a private port, and once against a synthetic demo database that
+# is safe to expose publicly. Defaults keep `python app.py` working unchanged
+# for local development.
+DB_PATH = os.environ.get("STOCK_DB", "stocks.db")
+TICKERS_PATH = os.environ.get("STOCK_TICKERS", "tickers.json")
+
+# The public instance runs with READ_ONLY=1. Hiding the buttons in the template
+# is not enough on its own — anyone can POST to the route directly — so the
+# routes themselves refuse to run.
+READ_ONLY = os.environ.get("READ_ONLY") == "1"
 
 app = Flask(__name__)
-app.secret_key = "stock-tracker-local-only"  # local dev only; not a secret
+# Only signs flash-message cookies here. Overridable so the deployed instance
+# isn't using a value that's published in the public repo.
+app.secret_key = os.environ.get("SECRET_KEY", "stock-tracker-local-only")
+
+
+def read_only_guard(view):
+    """Refuse a state-changing route when running as a public demo."""
+
+    @functools.wraps(view)
+    def wrapper(*args, **kwargs):
+        if READ_ONLY:
+            abort(403)
+        return view(*args, **kwargs)
+
+    return wrapper
+
+
+@app.context_processor
+def inject_flags():
+    # Lets templates hide controls that would only 403 if clicked.
+    return {"read_only": READ_ONLY}
 
 
 OUTLOOK_LABELS = {"green": "PROMISING", "yellow": "MIXED", "red": "RISKY"}
@@ -18,12 +52,12 @@ def outlook_label(value):
 
 
 def load_tickers():
-    with open("tickers.json") as f:
+    with open(TICKERS_PATH) as f:
         return json.load(f)["tickers"]
 
 
 def save_tickers(tickers):
-    with open("tickers.json", "w") as f:
+    with open(TICKERS_PATH, "w") as f:
         json.dump({"tickers": tickers}, f, indent=2)
 
 
@@ -63,7 +97,7 @@ def get_snapshot(conn, symbol):
 
 @app.route("/")
 def index():
-    conn = sqlite3.connect("stocks.db")
+    conn = sqlite3.connect(DB_PATH)
     tickers = []
     for symbol in load_tickers():
         latest = get_latest_tldr(conn, symbol)
@@ -82,7 +116,7 @@ def index():
 
 @app.route("/ticker/<symbol>")
 def ticker(symbol):
-    conn = sqlite3.connect("stocks.db")
+    conn = sqlite3.connect(DB_PATH)
     tldrs = conn.execute(
         "SELECT date, tldr, outlook, outlook_rationale FROM tldrs "
         "WHERE symbol = ? ORDER BY date DESC",
@@ -118,6 +152,7 @@ def ticker(symbol):
 
 
 @app.route("/refresh", methods=["POST"])
+@read_only_guard
 def refresh():
     subprocess.Popen([sys.executable, "tracker.py", "--no-ai"])
     flash("Refresh started — reload the page in ~10 seconds to see updated prices and news.")
@@ -125,6 +160,7 @@ def refresh():
 
 
 @app.route("/watchlist/add", methods=["POST"])
+@read_only_guard
 def watchlist_add():
     symbol = request.form.get("symbol", "").strip().upper()
     if symbol:
@@ -139,6 +175,7 @@ def watchlist_add():
 
 
 @app.route("/watchlist/remove/<symbol>", methods=["POST"])
+@read_only_guard
 def watchlist_remove(symbol):
     tickers = load_tickers()
     if symbol in tickers:
@@ -149,4 +186,7 @@ def watchlist_remove(symbol):
 
 
 if __name__ == "__main__":
+    # Local development only. In production the app is served by gunicorn
+    # (see Dockerfile) — debug=True exposes the Werkzeug console, which is
+    # remote code execution on anything reachable over a network.
     app.run(debug=True, port=5001)

@@ -28,6 +28,14 @@
             <p>Latest TLDR per ticker in your watchlist.</p>
         </hgroup>
 
+        {% if read_only %}
+            {# Public demo instance: synthetic data, and the routes behind these
+               controls return 403, so don't render controls that can't work. #}
+            <p style="padding: 0.75rem 1rem; border-left: 3px solid var(--pico-muted-border-color); background: var(--pico-card-background-color); margin-bottom: 1.5rem;">
+                <strong>Demo mode.</strong> This watchlist is generated sample data, not a real portfolio.
+                Editing is disabled here.
+            </p>
+        {% else %}
         <div style="display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap; margin-bottom: 1.5rem;">
             <form action="/refresh" method="POST" style="margin: 0;">
                 <button type="submit" class="secondary" style="margin: 0;">Refresh prices &amp; news (no AI)</button>
@@ -37,6 +45,7 @@
                 <button type="submit" style="margin: 0;">Add</button>
             </form>
         </div>
+        {% endif %}
 
         {% with messages = get_flashed_messages() %}
             {% if messages %}
@@ -77,6 +86,7 @@
             {% else %}
             <p><em>No TLDR yet — run <code>python tracker.py</code> to generate one.</em></p>
             {% endif %}
+            {% if not read_only %}
             <footer style="text-align: right; padding-top: 0.5rem;">
                 <form action="/watchlist/remove/{{ ticker.symbol }}" method="POST" style="display: inline; margin: 0;"
                       onsubmit="return confirm('Remove {{ ticker.symbol }} from your watchlist? Historical data is kept in the DB.');">
@@ -85,6 +95,7 @@
                     </button>
                 </form>
             </footer>
+            {% endif %}
         </article>
         {% endfor %}
     </main>

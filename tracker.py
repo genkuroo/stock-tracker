@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 import sqlite3
 import sys
 import textwrap
@@ -7,6 +8,12 @@ from datetime import datetime, timezone
 
 import anthropic
 import yfinance as yf
+
+# Kept in sync with app.py — the scheduled job and the dashboard must agree on
+# which database file they're using, or the timer writes prices the web UI
+# never displays. Defaults preserve the original local-directory behavior.
+DB_PATH = os.environ.get("STOCK_DB", "stocks.db")
+TICKERS_PATH = os.environ.get("STOCK_TICKERS", "tickers.json")
 
 parser = argparse.ArgumentParser(description="Pull stock data and (optionally) generate AI TLDRs.")
 parser.add_argument(
@@ -204,7 +211,7 @@ def format_time_ago(iso_string):
 
 
 def init_db():
-    conn = sqlite3.connect("stocks.db")
+    conn = sqlite3.connect(DB_PATH)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS prices (
             symbol TEXT NOT NULL,
@@ -325,10 +332,10 @@ ai = anthropic.Anthropic(max_retries=6) if not args.no_ai else None
 today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 try:
-    with open("tickers.json") as f:
+    with open(TICKERS_PATH) as f:
         config = json.load(f)
 except FileNotFoundError:
-    print("Error: tickers.json not found. Create it with a list of ticker symbols. See CLAUDE.md.")
+    print(f"Error: {TICKERS_PATH} not found. Create it with a list of ticker symbols. See CLAUDE.md.")
     sys.exit(1)
 
 def process_ticker(symbol):

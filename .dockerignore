@@ -1,0 +1,11 @@
+# Keep real data out of the image. This is the important one: without it, the
+# real stocks.db and tickers.json get baked into the image that the *public*
+# demo container runs from.
+stocks.db
+tickers.json
+.env
+logs/
+.venv/
+__pycache__/
+*.pyc
+.git/

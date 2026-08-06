@@ -18,6 +18,7 @@ Personal stock portfolio tracker. CLI tool that pulls live data for a configurab
 - [x] **Phase 6a** — Flask web dashboard with home (ticker cards + latest TLDR) and per-ticker detail page (TLDR history, chronicle, recent prices). Pico.css for styling, DB-only (no live yfinance from web layer).
 - [x] **Phase 6b** — Dashboard polish: price chart per ticker, current-snapshot summary, "refresh" button that shells out to `tracker.py --no-ai`.
 - [x] **Phase 7a** — AI Outlook (PROMISING/MIXED/RISKY) per ticker. Structured-output field in `generate_tldr`, conservative-yellow bias, colored pills on dashboard with editorial labels.
+- [x] **Phase 9** — Self-hosted deployment on a Raspberry Pi. Dockerized behind gunicorn; `STOCK_DB` / `STOCK_TICKERS` / `READ_ONLY` / `SECRET_KEY` env vars let one image run twice — privately against the real watchlist, and publicly against a synthetic database from `scripts/seed_demo.py`. `launchd` jobs replaced by systemd timers. Orchestration lives in the sibling `homelab-pi` repo; see its README.
 - [x] **Phase 8** — Scheduled automation via macOS `launchd`. `--no-ai` flag on `tracker.py` for cheap free-tier runs; `run_tracker.sh` wrapper loads `.env` and invokes the venv's Python; two LaunchAgents (`~/Library/LaunchAgents/com.stocktracker.{refresh,tldr}.plist`) fire daily 4pm refresh and weekly Monday 4pm AI run. Catches up missed runs on next wake.
 
 ## Tech decisions
