@@ -448,3 +448,12 @@ if failed_symbols:
         f"[WARN] Skipped {len(failed_symbols)} ticker(s): {', '.join(failed_symbols)} "
         "— likely transient yfinance/Yahoo issue; retry in a few minutes."
     )
+
+# One flaky ticker is normal and shouldn't page anyone, but every ticker
+# failing means the run did nothing -- usually no network or no DNS. Exit
+# non-zero so systemd marks the run failed and the homelab health check sees
+# it. On 2026-10-20 this job fetched 0 of 4 tickers and still exited 0, so the
+# failure went unnoticed for a whole outage.
+if config["tickers"] and successful_count == 0:
+    print("[ERROR] Every ticker failed -- treating this run as failed.")
+    sys.exit(1)
